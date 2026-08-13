@@ -1,0 +1,89 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowedTools "Bash(gh label create:*),Bash(gh label list:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh issue view:*)"'
+          prompt: |
+            Estás analizando el issue #${{ github.event.issue.number }} de este repositorio
+            (un juego de Tetris en JavaScript vanilla, sin dependencias ni build: `index.html`
+            con el canvas, `style.css`, y `game.js` (~300 líneas) con el modelo del tablero,
+            las piezas (tetrominós), la lógica de colisión/rotación, la puntuación y los niveles).
+
+            Título del issue: "${{ github.event.issue.title }}"
+            Cuerpo del issue:
+            ---
+            ${{ github.event.issue.body }}
+            ---
+
+            Tu tarea tiene dos partes. NO implementes ningún fix ni escribas código de solución:
+            solo diagnostica.
+
+            ## 1. Etiquetas
+
+            Lee `game.js`, `index.html`, `style.css` y `README.md` lo necesario para entender el
+            contexto del issue. Luego asegúrate de que existan estas etiquetas (créalas si faltan,
+            usando `gh label create <nombre> --color <hex> --description "<desc>" --force` para
+            que sea idempotente) y aplica las que correspondan con
+            `gh issue edit ${{ github.event.issue.number }} --add-label "<...>"`:
+
+            - `type: bug` (d73a4a), `type: enhancement` (a2eeef), `type: question` (d876e3),
+              `type: docs` (0075ca)
+            - `area: game-logic` (fbca04), `area: rendering` (bfd4f2), `area: input-controls`
+              (c5def5), `area: docs` (0075ca)
+            - `priority: low` (c2e0c6), `priority: medium` (fef2c0), `priority: high` (f9d0c4)
+
+            Aplica al menos un `type:` y, si es posible determinarlo con confianza, un `area:`
+            y una `priority:`. No inventes etiquetas fuera de esta lista.
+
+            ## 2. Comentario de diagnóstico
+
+            Publica (o actualiza si ya existe uno tuyo) un único comentario en el issue usando:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --edit-last --create-if-none --body "..."
+            ```
+
+            El comentario debe tener esta estructura, en español, y debe limitarse a diagnosticar
+            — NO propongas código, NO escribas un parche ni una solución paso a paso lista para
+            copiar/pegar:
+
+            ## 🔍 Diagnóstico automático
+
+            **Hipótesis de causa raíz:** explica brevemente qué crees que está causando el
+            problema descrito (o, si es una mejora/pregunta, qué se está pidiendo realmente).
+
+            **Área/archivo(s) afectado(s):** menciona funciones o secciones concretas de
+            `game.js` (p. ej. detección de colisiones, rotación con wall kicks, cálculo de
+            puntuación, bucle de niveles) o de `index.html`/`style.css` si aplica.
+
+            **Tipo y severidad:** clasifica (bug/mejora/pregunta/docs) y da una prioridad
+            estimada con una frase de justificación.
+
+            **Siguientes pasos sugeridos:** una lista breve de puntos a investigar o verificar
+            antes de escribir el fix (no el fix en sí), útil para que una persona o una sesión
+            futura de Claude implemente la solución.
+
+            Si el issue no tiene suficiente información para diagnosticar con confianza, dilo
+            explícitamente y pide los datos que faltan (pasos para reproducir, navegador,
+            captura, etc.) en vez de especular.
